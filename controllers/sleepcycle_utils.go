@@ -1,12 +1,18 @@
 package controllers
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"strings"
+
+	"github.com/go-logr/logr"
 	corev1alpha1 "github.com/rekuberate-io/sleepcycles/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
+	extv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"strings"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
@@ -56,4 +62,24 @@ func (r *SleepCycleReconciler) recordEvent(sleepCycle *corev1alpha1.SleepCycle, 
 	}
 
 	r.Recorder.Event(sleepCycle, eventType, reason, strings.ToLower(message))
+}
+
+func (r *SleepCycleReconciler) checkCrdExists(ctx context.Context, logger logr.Logger, customResourceDefinitionName string) (bool, error) {
+	qsCrd := &extv1.CustomResourceDefinition{
+		TypeMeta: metav1.TypeMeta{
+			Kind: "CustomResourceDefinition",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "fleetautoscalers.autoscaling.agones.dev",
+		},
+	}
+
+	logger.Info("Read the ConsoleQuickStart CRD")
+	if err := r.Get(ctx, client.ObjectKeyFromObject(qsCrd), qsCrd); err != nil {
+		if apierrors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
 }
